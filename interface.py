@@ -32,19 +32,35 @@ def stop():
 
 
 import time
+from midi import *
+import sys
 
-def song():
-	song="""
-		E4, E4, F4, G4, G4, F4, E4, D4, C4, C4, D4, E4, E4, D4, D4,
-		E4, E4, F4, G4, G4, F4, E4, D4, C4, C4, D4, E4, D4, C4, C4,
-	""".replace("\t","").replace("\n","").replace(" ","").split(",")
-	for note in song:
-		try:
-			play(note)
-			time.sleep(0.49)
-			stop()
-			time.sleep(0.01)
-			
-		except Exception as e:
-			print e
-song()
+track=0
+channel=1
+m = MidiFile() 
+m.open(sys.argv[1])
+m.read() 
+m.close()
+a=""
+periodslist=periods.items()
+playing=None
+print m
+try:
+	for event in m.tracks[track].events:
+		if event.type=="DeltaTime":
+			print event.time
+			time.sleep(event.time/1000.0)
+		elif event.type=="NOTE_OFF":
+			if event.channel==channel:
+				playing=None
+				print "stop"
+				stop()
+		elif event.type=="NOTE_ON":
+			if event.channel==channel:
+				if event.pitch>playing:
+					playing=event.pitch
+					play(periodslist[event.pitch-36][0])
+		else:
+			print event
+except KeyboardInterrupt:
+	stop()
