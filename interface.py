@@ -44,7 +44,6 @@ m.close()
 a=""
 periodslist=periods.items()
 playing=None
-print m
 try:
 	for event in m.tracks[track].events:
 		if event.type=="DeltaTime":
