@@ -25,7 +25,7 @@ $(PROG).elf: $(OBJS)
 	$(CC) $(CFLAGS) -o $(PROG).elf $(OBJS)
 
 %.o: %.c
-	$(CC) $(CFLAGS) -c $<
+	$(CXX) $(CFLAGS) -c $<
 
 %.lst: %.elf
 	$(OBJDUMP) -DS $< >$@

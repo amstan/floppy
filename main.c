@@ -3,50 +3,27 @@
 #include "bitop.h"
 #include "debug.h"
 
-#include <stdlib.h> 
+#include <msp430.h>
+//#include <legacymsp430.h>
+#include <stdint.h>
+#include "config.h"
+#include "ringbuffer.h"
+#include "usci_serial.h"
 
 #define RUN 0
-#define DIR 1
+#define DIR 4
 #define SW 3
 #define LED 6
 
 #define PERIOD TACCR0
-#define        C3      60300
-#define        Cs3     56914.9505736345
-#define        D3      53720.922154873
-#define        Ds3     50706.1133967601
-#define        E3      47860.2208603847
-#define        F3      45174.0621957505
-#define        Fs3     42636.9891891892
-#define        G3      40244.0969387755
-#define        Gs3     37986.2412713701
-#define        A3      35853.8318181818
-#define        As3     33841.7839368457
-#define        B3      31942.3463189439
-#define        C4      30148.8476092191
-#define        Cs4     28457.4752868172
-#define        D4      26860.4610774365
-#define        Ds4     25352.2418281747
-#define        E4      23929.3844613658
-#define        F4      22586.384331243
-#define        Fs4     21319.0707856969
-#define        G4      20122.0484693878
-#define        Gs4     18993.120635685
-#define        A4      17926.9159090909
-#define        As4     16920.8919684229
-#define        B4      15971.1731594719
-#define        C5      15074.7118967989
-#define        Cs5     14228.4809784079
-#define        D5      13430.0018728824
-#define        Ds5     12676.3246283648
-#define        E5      11964.6922306829
-#define        F5      11293.1921656215
 
-unsigned int song[] = {
-       E4, E4, F4, G4, G4, F4, E4, D4, C4, C4, D4, E4, E4, D4, D4,
-       E4, E4, F4, G4, G4, F4, E4, D4, C4, C4, D4, E4, D4, C4, C4,
-};
-unsigned char nsong = sizeof(song)/sizeof(int);
+ringbuffer_ui8_16 usci_buffer = { 0, 0, { 0 } };
+
+Serial<ringbuffer_ui8_16> usci0 = { usci_buffer };
+
+void __attribute__((interrupt (USCIAB0RX_VECTOR))) USCI0RX_ISR() {
+	usci_buffer.push_back(UCA0RXBUF);
+}
 
 void __delay_ms(unsigned int ms) {
 	for(;ms!=0;ms--) {
@@ -61,13 +38,11 @@ void chip_init(void) {
 }
 
 void io_init(void) {
-	P1DIR=0b01000011;
+	P1DIR=0b01010001;
 	P1OUT=0b00000000;
 }
 
 void timer_init(unsigned int on) {
-	PERIOD=0xFFFF;
-	
 	//internal osc, 1xprescaler, up mode
 	TACTL = TASSEL_2 + ID_1 + MC_1*(on!=0);
 
@@ -106,6 +81,11 @@ int main(void)
 {
 	chip_init();
 	io_init();
+	PERIOD=0xFFFF;
+	
+	usci0.init();
+	usci0.xmit("UART Inited\n");
+	usci0.xmit("Waiting for random button...\n");
 	
 	//Move the cursor to a random place based on input from button
 	set_bit(P1OUT,LED);
@@ -113,18 +93,27 @@ int main(void)
 	timer_init(1);
 	clear_bit(P1OUT,LED);
 	while(!test_bit(P1IN,SW));
-	srand(TAR);
-	floppy_init(rand()%60+20);
+	usci0.xmit("Moving head...\n");
+	floppy_init(TAR%60+20);
 	set_bit(P1OUT,LED);
+	usci0.xmit("Floppy Inited\n");
 	
-	timer_init(1);
+	timer_init(0);
 	
-	unsigned char i;
 	while(1) {
-		for(i=0;i<nsong;i++) {
-			PERIOD=song[i];
-			__delay_ms(500);
-			while(!test_bit(P1IN,SW));
+		unsigned char d0, d1;
+		unsigned char type = usci0.recv();
+		switch(type) {
+			case 1: usci0.xmit("stop\n"); timer_init(0); break;
+			case 2: usci0.xmit("play\n");
+				d0=usci0.recv();
+				d1=usci0.recv();
+				PERIOD=(d0<<8)|d1;
+				timer_init(1);
+				break;
+			default:
+			case 0: usci0.xmit("align\n"); break;
 		}
+		__delay_ms(10);
 	}
 }
