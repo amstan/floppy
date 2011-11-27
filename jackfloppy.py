@@ -3,6 +3,7 @@
 
 import jacklib
 import Queue
+from floppy import *
 
 # Globals
 global jack_midi_in_port, jack_midi_in_data
@@ -46,9 +47,17 @@ if __name__ == '__main__':
 	
 	while 1:
 		try:
-			print jack_midi_in_data.get(True,1)
+			mode, note, velo = jack_midi_in_data.get(True,1)
+			if mode==144:
+				play(note)
+			elif mode==128:
+				stop()
+			else:
+				print "ignoring",mode,note,velo
 		except Queue.Empty:
 			pass
+		except ValueError as e:
+			print e
 	
 	# Close Jack
 	if (jack_client):
