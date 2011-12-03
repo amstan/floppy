@@ -2,14 +2,14 @@
 import serial
 import collections
 
-serial=serial.Serial(port="/dev/ttyUSB0",baudrate=115200,timeout=1)
+serial=serial.Serial(port="/dev/ttyUSB1",baudrate=115200,timeout=1)
 
 ALIGN=0
 STOP=1
 PLAY=2
-startoctave=3
 
 periods=collections.OrderedDict()
+startoctave=3
 
 notes="C C# D D# E F F# G G# A A# B".split(" ")
 def tune(factor=1):
