@@ -2,7 +2,7 @@
 import serial
 import collections
 
-serial=serial.Serial(port="/dev/ttyUSB1",baudrate=115200,timeout=1)
+serial=serial.Serial(port="/dev/ttyUSB0",baudrate=115200,timeout=1)
 
 ALIGN=0
 STOP=1

@@ -23,14 +23,20 @@ def jack_process_callback(nframes, arg):
 			event = jacklib.jack_midi_event_t()
 			
 			for i in range(event_count):
-				jacklib.midi_event_get(jacklib.pointer(event), midi_in_buffer, i)
-				data = jacklib.translate_midi_event_buffer(event.buffer)
-				
-				if (len(data) < 3):
-					continue
-				
-				mode, note, velo = data
-				jack_midi_in_data.put([mode, note, velo],False)
+				if (jacklib.midi_event_get(jacklib.pointer(event), midi_in_buffer, i) == 0):
+					data = jacklib.translate_midi_event_buffer(event.buffer)
+					
+					if (len(data) == 1):
+						jack_midi_in_data.put_nowait((data[0], 0, 0))
+					
+					elif (len(data) == 2):
+						jack_midi_in_data.put_nowait((data[0], data[1], 0))
+					
+					elif (len(data) == 3):
+						jack_midi_in_data.put_nowait((data[0], data[1], data[2]))
+					
+					if (jack_midi_in_data.full()):
+						break
 			
 			del event
 	except Exception as e:
@@ -45,13 +51,21 @@ if __name__ == '__main__':
 	
 	jacklib.activate(jack_client)
 	
+	noteplaying=None
+	
 	while 1:
 		try:
 			mode, note, velo = jack_midi_in_data.get(True,1)
+			print (mode,note,velo)
 			if mode==144:
 				play(note)
+				noteplaying=note
 			elif mode==128:
-				stop()
+				if note==noteplaying:
+					stop()
+					print "stopping %s" % note
+				else:
+					print "not stopping: %s!=%s" % (note, noteplaying)
 			else:
 				print "ignoring",mode,note,velo
 		except Queue.Empty:

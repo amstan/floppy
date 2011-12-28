@@ -3,15 +3,22 @@
 
 # Imports
 from ctypes import *
-from sys import platform
+from sys import platform, version_info
 
+# Test for python 3.x
+if (version_info >= (3,0)):
+  PYTHON3 = True
+else:
+  PYTHON3 = False
 
 # Load JACK shared library
-if (platform == 'win32' or platform == 'win64'):
-  jacklib = cdll.LoadLibrary("libjack.dll")
-else:
-  jacklib = cdll.LoadLibrary("libjack.so.0")
-
+try:
+  if (platform == 'win32' or platform == 'win64'):
+    jacklib = cdll.LoadLibrary("libjack.dll")
+  else:
+    jacklib = cdll.LoadLibrary("libjack.so.0")
+except:
+  jacklib = None
 
 # Defines
 MAX_FRAMES = 4294967295
@@ -202,22 +209,45 @@ def translate_audio_port_buffer(void_p):
   return cast(void_p, POINTER(jack_default_audio_sample_t))
 
 def translate_midi_event_buffer(void_p):
-  if (len(void_p) == 1):
-    return (ord(void_p[0]))
-  elif (len(void_p) == 2):
-    return (ord(void_p[0]), ord(void_p[1]))
-  elif (len(void_p) == 3):
-    return (ord(void_p[0]), ord(void_p[1]), ord(void_p[2]))
-  else:
-    return []
+  if (not void_p):
+    return list()
 
-def encode_midi_data(mode, note=None, velo=None):
-  if (note == None):
-    return "%s" % (chr(mode))
-  elif (velo == None):
-    return "%s%s" % (chr(mode), chr(note))
+  if (len(void_p) == 1):
+    if (PYTHON3):
+      return (int(void_p),)
+    else:
+      return (ord(void_p),)
+
+  elif (len(void_p) == 2):
+    if (PYTHON3):
+      return (int(void_p[0]), int(void_p[1]))
+    else:
+      return (ord(void_p[0]), ord(void_p[1]))
+
+  elif (len(void_p) == 3):
+    if (PYTHON3):
+      return (int(void_p[0]), int(void_p[1]), int(void_p[2]))
+    else:
+      return (ord(void_p[0]), ord(void_p[1]), ord(void_p[2]))
+
+  elif (len(void_p) == 4):
+    if (PYTHON3):
+      return (int(void_p[0]), int(void_p[1]), int(void_p[2]), int(void_p[3]))
+    else:
+      return (ord(void_p[0]), ord(void_p[1]), ord(void_p[2]), ord(void_p[3]))
+
   else:
-    return "%s%s%s" % (chr(mode), chr(note), chr(velo))
+    return list()
+
+def encode_midi_data(d1, d2=None, d3=None, d4=None):
+  if (d2 == None):
+    return "%s" % (chr(d1))
+  elif (d3 == None):
+    return "%s%s" % (chr(d1), chr(d2))
+  elif (d4 == None):
+    return "%s%s%s" % (chr(d1), chr(d2), chr(d3))
+  else:
+    return "%s%s%s%s" % (chr(d1), chr(d2), chr(d3), chr(d4))
 
 
 # Functions
@@ -238,6 +268,7 @@ def get_version_string():
   return jacklib.jack_get_version_string()
 
 def client_open(client_name, options, status):
+  if (PYTHON3): client_name = client_name.encode()
   if (options == None): options = 0
   if (status == None): status = 0
   jacklib.jack_client_open.argtypes = [c_char_p, c_int, c_int]
@@ -245,6 +276,7 @@ def client_open(client_name, options, status):
   return jacklib.jack_client_open(client_name, options, status)
 
 def client_new(client_name):
+  if (PYTHON3): client_name = client_name.encode()
   jacklib.jack_client_new.argtypes = [c_char_p]
   jacklib.jack_client_new.restype = jack_client_t
   return jacklib.jack_client_new(client_name)
@@ -264,12 +296,16 @@ def get_client_name(client):
   jacklib.jack_get_client_name.restype = c_char_p
   return jacklib.jack_get_client_name(client)
 
-def get_internal_client_new(client_name, load_name, load_init):
+def internal_client_new(client_name, load_name, load_init):
+  if (PYTHON3): client_name = client_name.encode()
+  if (PYTHON3): load_name = load_name.encode()
+  if (PYTHON3): load_init = load_init.encode()
   jacklib.jack_internal_client_new.argtypes = [c_char_p, c_char_p, c_char_p]
   jacklib.jack_internal_client_new.restype = c_int
   return jacklib.jack_internal_client_new(client_name, load_name, load_init)
 
-def get_internal_client_close(client_name):
+def internal_client_close(client_name):
+  if (PYTHON3): client_name = client_name.encode()
   jacklib.jack_internal_client_close.argtypes = [c_char_p]
   jacklib.jack_internal_client_close.restype = None
   return jacklib.jack_internal_client_close(client_name)
@@ -285,6 +321,7 @@ def deactivate(client):
   return jacklib.jack_deactivate(client)
 
 def get_client_pid(name):
+  if (PYTHON3): name = name.encode()
   jacklib.jack_get_client_pid.argtypes = [c_char_p]
   jacklib.jack_get_client_pid.restype = c_int
   return jacklib.jack_get_client_pid(name)
@@ -445,6 +482,8 @@ def cpu_load(client):
 # Port Functions
 
 def port_register(client, port_name, port_type, flags, buffer_size):
+  if (PYTHON3): port_name = port_name.encode()
+  if (PYTHON3): port_type = port_type.encode()
   jacklib.jack_port_register.argtypes = [jack_client_t, c_char_p, c_char_p, c_ulong, c_ulong]
   jacklib.jack_port_register.restype = jack_port_t
   return jacklib.jack_port_register(client, port_name, port_type, flags, buffer_size)
@@ -495,6 +534,7 @@ def port_connected(port):
   return jacklib.jack_port_connected(port)
 
 def port_connected_to(port, port_name):
+  if (PYTHON3): port_name = port_name.encode()
   jacklib.jack_port_connected_to.argtypes = [jack_port_t, c_char_p]
   jacklib.jack_port_connected_to.restype = c_int
   return jacklib.jack_port_connected_to(port, port_name)
@@ -522,16 +562,19 @@ def port_untie(port):
   return jacklib.jack_port_untie(port)
 
 def port_set_name(port, port_name):
+  if (PYTHON3): port_name = port_name.encode()
   jacklib.jack_port_set_name.argtypes = [jack_port_t, c_char_p]
   jacklib.jack_port_set_name.restype = c_int
   return jacklib.jack_port_set_name(port, port_name)
 
 def port_set_alias(port, alias):
+  if (PYTHON3): alias = alias.encode()
   jacklib.jack_port_set_alias.argtypes = [jack_port_t, c_char_p]
   jacklib.jack_port_set_alias.restype = c_int
   return jacklib.jack_port_set_alias(port, alias)
 
 def port_unset_alias(port, alias):
+  if (PYTHON3): alias = alias.encode()
   jacklib.jack_port_unset_alias.argtypes = [jack_port_t, c_char_p]
   jacklib.jack_port_unset_alias.restype = c_int
   return jacklib.jack_port_unset_alias(port, alias)
@@ -555,6 +598,7 @@ def port_request_monitor(port, onoff):
   return jacklib.jack_port_request_monitor(port, onoff)
 
 def port_request_monitor_by_name(client, port_name, onoff):
+  if (PYTHON3): port_name = port_name.encode()
   jacklib.jack_port_request_monitor_by_name.argtypes = [jack_client_t, c_char_p, c_int]
   jacklib.jack_port_request_monitor_by_name.restype = c_int
   return jacklib.jack_port_request_monitor_by_name(client, port_name, onoff)
@@ -570,11 +614,15 @@ def port_monitoring_input(port):
   return jacklib.jack_port_monitoring_input(port)
 
 def connect(client, source_port, destination_port):
+  if (PYTHON3): source_port = source_port.encode()
+  if (PYTHON3): destination_port = destination_port.encode()
   jacklib.jack_connect.argtypes = [jack_client_t, c_char_p, c_char_p]
   jacklib.jack_connect.restype = c_int
   return jacklib.jack_connect(client, source_port, destination_port)
 
 def disconnect(client, source_port, destination_port):
+  if (PYTHON3): source_port = source_port.encode()
+  if (PYTHON3): destination_port = destination_port.encode()
   jacklib.jack_disconnect.argtypes = [jack_client_t, c_char_p, c_char_p]
   jacklib.jack_disconnect.restype = c_int
   return jacklib.jack_disconnect(client, source_port, destination_port)
@@ -595,6 +643,7 @@ def port_type_size():
   return jacklib.jack_port_type_size()
 
 def port_type_get_buffer_size(client, port_type):
+  if (PYTHON3): port_type = port_type.encode()
   jacklib.jack_port_type_get_buffer_size.argtypes = [jack_client_t, c_char_p]
   jacklib.jack_port_type_get_buffer_size.restype = c_size_t
   return jacklib.jack_port_type_get_buffer_size(client, port_type)
@@ -641,12 +690,15 @@ def recompute_total_latency(client, port):
 # Port Searching
 
 def get_ports(client, port_name_pattern, type_name_pattern, flags):
+  if (PYTHON3 and port_name_pattern): port_name_pattern = port_name_pattern.encode()
+  if (PYTHON3 and type_name_pattern): type_name_pattern = type_name_pattern.encode()
   jacklib.jack_get_ports.argtypes = [jack_client_t, c_char_p, c_char_p, c_ulong]
   jacklib.jack_get_ports.restype = POINTER(c_char_p)
   list_p = jacklib.jack_get_ports(client, port_name_pattern, type_name_pattern, flags)
   return __pointer_to_list(list_p)
 
 def port_by_name(client, port_name):
+  if (PYTHON3): port_name = port_name.encode()
   jacklib.jack_port_by_name.argtypes = [jack_client_t, c_char_p]
   jacklib.jack_port_by_name.restype = jack_port_t
   return jacklib.jack_port_by_name(client, port_name)
