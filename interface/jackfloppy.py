@@ -4,10 +4,17 @@
 import jacklib
 import Queue
 from floppy import *
+import floppy
+
+MIDI_MASK   =0b11110000
+MIDI_NOTEOFF=0b10000000
+MIDI_NOTEON =0b10010000
+MIDI_PITCH  =0b11100000
+MIDI_MODE   =0b10110000
 
 # Globals
-global jack_midi_in_port, jack_midi_in_data
 jack_client = None
+global jack_midi_in_port, jack_midi_in_data
 jack_midi_in_port = None
 jack_midi_in_data = Queue.Queue(1024)
 
@@ -46,32 +53,57 @@ def jack_process_callback(nframes, arg):
 if __name__ == '__main__':
 	# Start jack
 	jack_client = jacklib.client_open("Floppy Drive", jacklib.NullOption, 0)
-	jack_midi_in_port = jacklib.port_register(jack_client, "midi_in", jacklib.DEFAULT_MIDI_TYPE, jacklib.PortIsInput, 0)
+	jack_midi_in_port = jacklib.port_register(jack_client, "midi", jacklib.DEFAULT_MIDI_TYPE, jacklib.PortIsInput, 0)
 	jacklib.set_process_callback(jack_client, jack_process_callback, 0)
 	
 	jacklib.activate(jack_client)
 	
 	noteplaying=None
 	
+	pitches=[]
+	
 	while 1:
 		try:
 			mode, note, velo = jack_midi_in_data.get(True,1)
-			print (mode,note,velo)
-			if mode==144:
+			
+			if (mode&MIDI_MASK)==MIDI_NOTEON:
+				#instr(mode&(~MIDI_MASK))
 				play(note)
 				noteplaying=note
-			elif mode==128:
+			
+			elif (mode&MIDI_MASK)==MIDI_NOTEOFF:
 				if note==noteplaying:
 					stop()
-					print "stopping %s" % note
-				else:
-					print "not stopping: %s!=%s" % (note, noteplaying)
+			
+			elif (mode&MIDI_MASK)==MIDI_PITCH:
+				pitch=velo*256+note
+				
+				if pitch==0:
+					#apparently this is a no bend somehow...
+					pitch=0x4000
+				
+				pitch-=0x4000
+				pitch*=1.0
+				pitch/=0x18000
+				print "Pitch-bend", pitch
+				pitch=2**pitch
+				
+				play_period(int(floppy.current_period/pitch))
+			elif (mode&MIDI_MASK)==MIDI_MODE:
+				if note in (64,120,121,123):
+					#print "Everything off(%s) on channel %s." % (note, mode&(~MIDI_MASK))
+					stop()
+			
 			else:
 				print "ignoring",mode,note,velo
+				pass
 		except Queue.Empty:
 			pass
 		except ValueError as e:
 			print e
+		except KeyboardInterrupt:
+			stop()
+			raise
 	
 	# Close Jack
 	if (jack_client):
