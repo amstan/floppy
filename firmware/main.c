@@ -3,7 +3,6 @@
 #include "bitop.h"
 #include "debug.h"
 
-#include <msp430.h>
 #include <stdint.h>
 #include "config.h"
 #include "ringbuffer.h"
@@ -22,7 +21,7 @@ unsigned char instr=INSTR_OSCILATE;
 
 #define POS_START 0
 #define POS_END 160
-#define POS_THRESHOLD 30
+#define POS_THRESHOLD 20
 unsigned int pos=0;
 unsigned char dir=0;
 
@@ -66,6 +65,11 @@ void timer_init(unsigned int on) {
 	_BIS_SR(GIE);  //Global
 }
 
+void toggle_dir(void) {
+	dir^=1;
+	toggle_bit(P1OUT,LED_R);
+}
+
 void floppy_init(unsigned int target_pos) {
 	timer_init(0);
 	
@@ -96,10 +100,10 @@ void __attribute__((interrupt (TIMER0_A0_VECTOR))) timer_vector() {
 		
 		if(dir==0) {
 			pos++;
-			if(pos>(POS_END-POS_THRESHOLD)) dir^=1;
+			if(pos>(POS_END-POS_THRESHOLD)) toggle_dir();
 		} else {
 			pos--;
-			if(pos<(POS_START+POS_THRESHOLD)) dir^=1;
+			if(pos<(POS_START+POS_THRESHOLD)) toggle_dir();
 		}
 	}
 }
@@ -112,16 +116,7 @@ int main(void) {
 	usci0.init();
 	
 	floppy_init(POS_END/2);
-	
-	//Move the cursor to a random place based on input from button
-// 	set_bit(P1OUT,LED_G);
-// 	while(test_bit(P1IN,SW));
-// 	timer_init(1);
-// 	clear_bit(P1OUT,LED_G);
-// 	while(!test_bit(P1IN,SW));
-// 	floppy_init(TAR%120+20);
-// 	set_bit(P1OUT,LED_G);
-//	timer_init(0);
+	set_bit(P1OUT,LED_G);
 	
 	while(1) {
 		unsigned char d0, d1;
@@ -129,6 +124,7 @@ int main(void) {
 		switch(type) {
 			case STOP:
 				timer_init(0);
+				clear_bit(P1OUT,LED_G);
 				break;
 			
 			case PLAY:
@@ -136,6 +132,7 @@ int main(void) {
 				d1=usci0.recv();
 				PERIOD=(d0<<8)|d1;
 				timer_init(1);
+				set_bit(P1OUT,LED_G);
 				break;
 			
 			case INSTR:
@@ -143,7 +140,7 @@ int main(void) {
 				break;
 			
 			case TOGGLE_DIR:
-				dir^=1;
+				toggle_dir();
 				break;
 			
 			case RESET:
