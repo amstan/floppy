@@ -1,18 +1,19 @@
 #!/usr/bin/env python2
 from notes import *
 
-ALIGN=0
-STOP=1
-PLAY=2
-INSTR=3
-TOGGLE_DIR=4
-RESET=5
-
 class Floppy(object):
 	FCPU=16000000
 	TIMERCLOCK=FCPU
 	TIMERCLOCK/=8 #prescaler
 	TIMERCLOCK/=2 #still too big
+	
+	#Protcol message types
+	_ALIGN=0
+	_STOP=1
+	_PLAY=2
+	_INSTR=3
+	_TOGGLE_DIR=4
+	_RESET=5
 	
 	def __init__(self,port="/dev/ttyACM0",reset=True):
 		import serial
@@ -30,9 +31,9 @@ class Floppy(object):
 	
 	def sync(self,times=3):
 		"""Syncs the serial protocol. WARNING: don't spam the line, new bytes are discarded by something for some reason."""
-		self.serial.write(bytearray((ALIGN,)*times))
+		self.serial.write(bytearray((self._ALIGN,)*times))
 		self.serial.flush()
-		self.serial.write(bytearray((ALIGN,)))
+		self.serial.write(bytearray((self._ALIGN,)))
 	
 	def reset(self):
 		import time
@@ -41,13 +42,13 @@ class Floppy(object):
 		time.sleep(0.1)
 		
 		print "Resetting %r" % (self)
-		self.serial.write(bytearray((RESET,)))
+		self.serial.write(bytearray((self._RESET,)))
 		time.sleep(3)
 		
 		self.sync()
 	
 	def stop(self):
-		self.serial.write(bytearray((STOP,)))
+		self.serial.write(bytearray((self._STOP,)))
 		self._note=None
 	
 	def play_period(self,period):
@@ -57,7 +58,7 @@ class Floppy(object):
 		
 		d0=(period&0xFF00)>>8
 		d1=period&0xFF
-		data=bytearray((PLAY,d0,d1))
+		data=bytearray((self._PLAY,d0,d1))
 		self.serial.write(data)
 	
 	def play(self,note):
@@ -109,42 +110,44 @@ class Floppy(object):
 		finally:
 			self._instrument=value
 		
-		self.serial.write(bytearray((INSTR,self._instrument)))
+		self.serial.write(bytearray((self._INSTR,self._instrument)))
 	
 	def toggle_dir(self):
-		self.serial.write(bytearray((TOGGLE_DIR,)))
+		self.serial.write(bytearray((self._TOGGLE_DIR,)))
+	
+	def __del__(self):
+		print "Stopping %r" % (self)
+		time.sleep(0.5)
+		self.sync(6)
+		time.sleep(0.1)
+		self.stop()
+		#self.serial.write(bytearray((1,)))
+		self.serial.flush()
 
 if __name__=="__main__":
-	PITCH_DEMO=True
+	PITCH_DEMO=False
 	
 	import time,sys
 	floppy=Floppy(port=sys.argv[1],reset=False)
-	try:
-		while 1:
-			for noteid in range(0,128):
-				try:
-					#play next note
-					note=Note(noteid)
-					floppy.play(note)
-					
-					#wait for key
-					raw_input()
-					
-					if PITCH_DEMO:
-						for pitch in range(0x4000,0x6000,0x100):
-							floppy.pitchbend(pitch)
-							time.sleep(0.01)
-						time.sleep(0.2)
-						floppy.sync()
-					else:
-						floppy.stop()
-						time.sleep(0.05)
-				except Exception as e:
-					print repr(e)
-			floppy.sync()
-	finally:
-		print "Stopping %r" % (floppy)
-		time.sleep(0.5)
+	while 1:
+		for noteid in range(0,128):
+			try:
+				#play next note
+				note=Note(noteid)
+				floppy.play(note)
+				
+				#wait for key
+				raw_input()
+				
+				if PITCH_DEMO:
+					for pitch in range(0x4000,0x6000,0x100):
+						floppy.pitchbend(pitch)
+						time.sleep(0.01)
+					time.sleep(0.2)
+					floppy.sync()
+				else:
+					floppy.stop()
+					time.sleep(0.05)
+			except Exception as e:
+				print repr(e)
 		floppy.sync()
-		floppy.stop()
-		floppy.serial.flush()
