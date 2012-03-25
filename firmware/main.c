@@ -58,7 +58,7 @@ void io_init(void) {
 
 void timer_init(unsigned int on) {
 	//internal osc, 8xprescaler, up mode
-	TACTL = TASSEL_2 + ID_2 + MC_1*(on!=0);
+	TACTL = TASSEL_2 + ID_3 + MC_1*(on!=0);
 
 	//Enable Interrupts
 	CCTL0 |= CCIE; //Timer
