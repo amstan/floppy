@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 
 import jacklib
@@ -66,8 +66,21 @@ if __name__ == '__main__':
 		try:
 			mode, note, velo = jack_midi_in_data.get(True,1)
 			
+			if(note<67):
+				#below
+				if(not int(sys.argv[2])):
+					continue
+				print "below"
+				note-=36
+				note+=12
+			else:
+				#above
+				if(int(sys.argv[2])):
+					continue
+				print "above"
+				note-=72-24
+			
 			if (mode&MIDI_MASK)==MIDI_NOTEON:
-				#instr(mode&(~MIDI_MASK))
 				play(note)
 				noteplaying=note
 			

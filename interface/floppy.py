@@ -1,8 +1,11 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 import serial
 import collections
+import math
 
-serial=serial.Serial(port="/dev/ttyACM0",baudrate=9600,timeout=1)
+import sys
+
+serial=serial.Serial(port=sys.argv[1],baudrate=9600,timeout=1)
 
 ALIGN=0
 STOP=1
@@ -14,9 +17,10 @@ RESET=5
 periods=range(128)
 def tune(factor=1):
 	firstC=60300/factor
-	difference=0.9439953810623557
+	difference=math.pow(2,1.0/12)
+	print difference
 	for noteid, _ in enumerate(periods):
-		periods[noteid]=int(firstC * difference**(noteid))
+		periods[noteid]=int(firstC / difference**(noteid))
 	print periods
 tune(0.986)
 
@@ -79,7 +83,7 @@ if __name__=="__main__":
 	"""Do a simple test"""
 	import time
 	try:
-		note=40
+		note=12
 		while 1:
 			play(note)
 			note+=1
