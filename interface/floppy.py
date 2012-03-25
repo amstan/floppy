@@ -1,11 +1,5 @@
 #!/usr/bin/env python2
-import serial
-import collections
-import math
-
-import sys
-
-serial=serial.Serial(port=sys.argv[1],baudrate=9600,timeout=1)
+from notes import *
 
 ALIGN=0
 STOP=1
@@ -14,81 +8,143 @@ INSTR=3
 TOGGLE_DIR=4
 RESET=5
 
-periods=range(128)
-def tune(factor=1):
-	firstC=60300/factor
-	difference=math.pow(2,1.0/12)
-	print difference
-	for noteid, _ in enumerate(periods):
-		periods[noteid]=int(firstC / difference**(noteid))
-	print periods
-tune(0.986)
-
-def notename(noteid):
-	"""Converts midi note id to note name, Ex: 24->C1"""
-	notes="C C# D D# E F F# G G# A A# B".split(" ")
+class Floppy(object):
+	FCPU=16000000
+	TIMERCLOCK=FCPU
+	TIMERCLOCK/=8 #prescaler
+	TIMERCLOCK/=2 #still too big
 	
-	octave=noteid/12-1
-	note=noteid%12
+	def __init__(self,port="/dev/ttyACM0",reset=True):
+		import serial
+		self.port=port
+		self.serial=serial.Serial(port=self.port,baudrate=9600,timeout=1)
+		self.serial.flush()
+		
+		if(reset):
+			self.reset()
+		
+		self.instrument=0
 	
-	return "%s%s" % (notes[note],octave)
-
-current_period=0
-def play(note):
-	if (current_instr==INSTR_VIOLIN) and (note>44):
-		raise ValueError("Violin cannot play that high! %s(%d)" % (notename(note), note))
-	if (current_instr==INSTR_OSCILATE) and (note>49):
-		raise ValueError("Oscillator cannot play that high! %s(%d)" % (notename(note), note))
+	def __repr__(self):
+		return "Floppy(%r)" % (self.port)
 	
-	period=periods[note]
+	def sync(self,times=3):
+		"""Syncs the serial protocol. WARNING: don't spam the line, new bytes are discarded by something for some reason."""
+		self.serial.write(bytearray((ALIGN,)*times))
+		self.serial.flush()
+		self.serial.write(bytearray((ALIGN,)))
 	
-	print "%s(%d) - %d" % (notename(note), note, period)
+	def reset(self):
+		import time
+		
+		self.sync()
+		time.sleep(0.1)
+		
+		print "Resetting %r" % (self)
+		self.serial.write(bytearray((RESET,)))
+		time.sleep(3)
+		
+		self.sync()
 	
-	instr(current_instr)
-	if current_instr==INSTR_VIOLIN:
-		toggle_dir()
+	def stop(self):
+		self.serial.write(bytearray((STOP,)))
+		self._note=None
 	
-	global current_period
-	current_period=period
+	def play_period(self,period):
+		period=int(period)
+		if(period>2**16):
+			raise ValueError("Period(%d) for %r too big!" % (period,self))
+		
+		d0=(period&0xFF00)>>8
+		d1=period&0xFF
+		data=bytearray((PLAY,d0,d1))
+		self.serial.write(data)
 	
-	play_period(period)
-
-def play_period(period):
-	if(period>2**16):
-		raise ValueError("Period for %s(%d) too big!" % (notename(note), note))
+	def play(self,note):
+		if (note>128):
+			raise ValueError("%r cannot play that high! %r" % (self,note))
+		
+		self._note=note
+		self._period=note.period(self.TIMERCLOCK)
+		print "%r - %d" % (note,self._period)
+		
+		if self.instrument=="violin":
+			self.toggle_dir()
+		
+		self.play_period(self._period)
 	
-	d0=(period&0xFF00)>>8
-	d1=period&0xFF
-	data=bytearray([PLAY,d0,d1])
-	serial.write(data)
-
-def stop():
-	serial.write(bytearray([STOP]))
-
-INSTR_OSCILATE = 0
-INSTR_VIOLIN = 1
-def instr(target_instr):
-	global current_instr
-	current_instr=target_instr
-	serial.write(bytearray([INSTR,target_instr]))
-instr(INSTR_OSCILATE)
-
-def toggle_dir():
-	serial.write(bytearray([TOGGLE_DIR]))
-
-def reset():
-	serial.write(bytearray([RESET]))
+	def pitchbend(self,pitch):
+		"""Pitchbends according to a midi pitchbend value."""
+		if pitch==0:
+			#apparently this is a no bend somehow...
+			pitch=0x4000
+		
+		pitch-=0x4000
+		pitch*=1.0
+		pitch/=0x18000
+		pitch=2**pitch
+		
+		self.play_period(self._period/pitch)
+		print "Pitchbending %s*%2.2f" % (self._note,pitch)
+	
+	instruments=["oscillate","violin"]
+	
+	@property
+	def instrument(self):
+		return self.instruments[self._instrument]
+		
+	@instrument.setter
+	def instrument(self,value):
+		try:
+			value=self.instruments.index(value)
+		except ValueError:
+			if value not in range(len(self.instruments)):
+				raise ValueError("No such instrument(%r) exists." % value)
+		
+		try:
+			if self._instrument!=value:
+				print "Setting instrument to %s." % (self.instrument)
+		except:
+			pass
+		finally:
+			self._instrument=value
+		
+		self.serial.write(bytearray((INSTR,self._instrument)))
+	
+	def toggle_dir(self):
+		self.serial.write(bytearray((TOGGLE_DIR,)))
 
 if __name__=="__main__":
-	"""Do a simple test"""
-	import time
+	PITCH_DEMO=True
+	
+	import time,sys
+	floppy=Floppy(port=sys.argv[1],reset=False)
 	try:
-		note=12
 		while 1:
-			play(note)
-			note+=1
-			raw_input()
-	except KeyboardInterrupt:
-		stop()
-	except Exception as e:
-		print e
+			for noteid in range(0,128):
+				try:
+					#play next note
+					note=Note(noteid)
+					floppy.play(note)
+					
+					#wait for key
+					raw_input()
+					
+					if PITCH_DEMO:
+						for pitch in range(0x4000,0x6000,0x100):
+							floppy.pitchbend(pitch)
+							time.sleep(0.01)
+						time.sleep(0.2)
+						floppy.sync()
+					else:
+						floppy.stop()
+						time.sleep(0.05)
+				except Exception as e:
+					print repr(e)
+			floppy.sync()
+	finally:
+		print "Stopping %r" % (floppy)
+		time.sleep(0.5)
+		floppy.sync()
+		floppy.stop()
+		floppy.serial.flush()
