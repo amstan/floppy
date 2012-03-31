@@ -115,39 +115,41 @@ class Floppy(object):
 	def toggle_dir(self):
 		self.serial.write(bytearray((self._TOGGLE_DIR,)))
 	
-	def __del__(self):
+	def __enter__(self):
+		return self
+	
+	def __exit__(self,type,value,traceback):
 		print "Stopping %r" % (self)
 		time.sleep(0.5)
 		self.sync(6)
 		time.sleep(0.1)
 		self.stop()
-		#self.serial.write(bytearray((1,)))
 		self.serial.flush()
 
 if __name__=="__main__":
 	PITCH_DEMO=False
 	
 	import time,sys
-	floppy=Floppy(port=sys.argv[1],reset=False)
-	while 1:
-		for noteid in range(0,128):
-			try:
-				#play next note
-				note=Note(noteid)
-				floppy.play(note)
-				
-				#wait for key
-				raw_input()
-				
-				if PITCH_DEMO:
-					for pitch in range(0x4000,0x6000,0x100):
-						floppy.pitchbend(pitch)
-						time.sleep(0.01)
-					time.sleep(0.2)
-					floppy.sync()
-				else:
-					floppy.stop()
-					time.sleep(0.05)
-			except Exception as e:
-				print repr(e)
-		floppy.sync()
+	with Floppy(port=sys.argv[1],reset=False) as floppy:
+		while 1:
+			for noteid in range(0,128):
+				try:
+					#play next note
+					note=Note(noteid)
+					floppy.play(note)
+					
+					#wait for key
+					raw_input()
+					
+					if PITCH_DEMO:
+						for pitch in range(0x4000,0x6000,0x100):
+							floppy.pitchbend(pitch)
+							time.sleep(0.01)
+						time.sleep(0.2)
+						floppy.sync()
+					else:
+						floppy.stop()
+						time.sleep(0.05)
+				except Exception as e:
+					print repr(e)
+			floppy.sync()

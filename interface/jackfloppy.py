@@ -5,6 +5,7 @@ import jacklib
 import Queue
 from floppy import *
 import floppy
+import sys
 
 MIDI_MASK   =0b11110000
 MIDI_NOTEOFF=0b10000000
@@ -91,17 +92,17 @@ if __name__ == '__main__':
 			elif (mode&MIDI_MASK)==MIDI_PITCH:
 				pitch=velo*256+note
 				
-				if pitch==0:
-					#apparently this is a no bend somehow...
-					pitch=0x4000
+				#if pitch==0:
+					##apparently this is a no bend somehow...
+					#pitch=0x4000
 				
-				pitch-=0x4000
-				pitch*=1.0
-				pitch/=0x18000
-				print "Pitch-bend", pitch
-				pitch=2**pitch
+				#pitch-=0x4000
+				#pitch*=1.0
+				#pitch/=0x18000
+				#print "Pitch-bend", pitch
+				#pitch=2**pitch
 				
-				play_period(int(floppy.current_period/pitch))
+				#play_period(int(floppy.current_period/pitch))
 			elif (mode&MIDI_MASK)==MIDI_MODE:
 				if note in (64,120,121,123):
 					#print "Everything off(%s) on channel %s." % (note, mode&(~MIDI_MASK))
