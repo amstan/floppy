@@ -3,8 +3,6 @@
 
 import jacklib
 import Queue
-from floppy import *
-import floppy
 import sys
 
 MIDI_MASK   =0b11110000
@@ -12,6 +10,9 @@ MIDI_NOTEOFF=0b10000000
 MIDI_NOTEON =0b10010000
 MIDI_PITCH  =0b11100000
 MIDI_MODE   =0b10110000
+
+from floppy import *
+from notes import *
 
 # Globals
 jack_client = None
@@ -59,54 +60,30 @@ if __name__ == '__main__':
 	
 	jacklib.activate(jack_client)
 	
+	floppy=Floppy(port=sys.argv[1],reset=True)
+	
 	noteplaying=None
-	
-	pitches=[]
-	
 	while 1:
 		try:
-			mode, note, velo = jack_midi_in_data.get(True,1)
-			
-			if(note<67):
-				#below
-				if(not int(sys.argv[2])):
-					continue
-				print "below"
-				note-=36
-				note+=12
-			else:
-				#above
-				if(int(sys.argv[2])):
-					continue
-				print "above"
-				note-=72-24
+			mode, noteid, velo = jack_midi_in_data.get(True,1)
+			note=Note(noteid)
 			
 			if (mode&MIDI_MASK)==MIDI_NOTEON:
-				play(note)
+				floppy.play(note)
 				noteplaying=note
 			
 			elif (mode&MIDI_MASK)==MIDI_NOTEOFF:
 				if note==noteplaying:
-					stop()
+					floppy.stop()
 			
 			elif (mode&MIDI_MASK)==MIDI_PITCH:
 				pitch=velo*256+note
-				
-				#if pitch==0:
-					##apparently this is a no bend somehow...
-					#pitch=0x4000
-				
-				#pitch-=0x4000
-				#pitch*=1.0
-				#pitch/=0x18000
-				#print "Pitch-bend", pitch
-				#pitch=2**pitch
-				
-				#play_period(int(floppy.current_period/pitch))
+				floppy.pitchbend(pitch)
+			
 			elif (mode&MIDI_MASK)==MIDI_MODE:
 				if note in (64,120,121,123):
 					#print "Everything off(%s) on channel %s." % (note, mode&(~MIDI_MASK))
-					stop()
+					floppy.stop()
 			
 			else:
 				print "ignoring",mode,note,velo
